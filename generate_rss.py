@@ -65,8 +65,7 @@ def main():
         '</rss>\n'
     )
 
-    with open("feed.xml", "w", encoding="utf-8", newline="\n") as f:
-        f.write(rss)
+    with open("feed.rss", "w", encoding="utf-8", newline="\n") as f:
 
 if __name__ == "__main__":
     main()
