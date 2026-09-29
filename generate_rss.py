@@ -17,46 +17,55 @@ def fetch(url):
     with urllib.request.urlopen(req, timeout=30) as response:
         return response.read()
 
+def clean_text(value):
+    if not value:
+        return ""
+    return "".join(
+        c for c in value
+        if c in "\t\n\r" or ord(c) >= 32
+    )
+
 def main():
     data = fetch(GOOGLE_NEWS_URL)
     root = ET.fromstring(data)
 
-    items = []
+    rss_items = []
 
     for item in root.findall("./channel/item"):
-        title = item.findtext("title", "")
-        link = item.findtext("link", "")
-        description = item.findtext("description", "")
-        pub_date = item.findtext("pubDate", "")
-        guid = item.findtext("guid", link)
+        title = clean_text(item.findtext("title", ""))
+        link = clean_text(item.findtext("link", ""))
+        description = clean_text(item.findtext("description", ""))
+        pub_date = clean_text(item.findtext("pubDate", ""))
+        guid = clean_text(item.findtext("guid", link))
 
-        if "calcalist.co.il" not in (link or ""):
+        if "calcalist.co.il" not in link:
             continue
 
-        items.append(f"""
-        <item>
-          <title>{escape(title)}</title>
-          <link>{escape(link)}</link>
-          <guid isPermaLink="false">{escape(guid)}</guid>
-          <pubDate>{escape(pub_date)}</pubDate>
-          <description>{escape(description)}</description>
-        </item>
-        """)
+        rss_items.append(
+            "    <item>\n"
+            f"      <title>{escape(title)}</title>\n"
+            f"      <link>{escape(link)}</link>\n"
+            f"      <guid isPermaLink=\"false\">{escape(guid)}</guid>\n"
+            f"      <pubDate>{escape(pub_date)}</pubDate>\n"
+            f"      <description>{escape(description)}</description>\n"
+            "    </item>"
+        )
 
-    rss = f"""<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>כלכליסט - חדשות רכב</title>
-    <link>https://www.calcalist.co.il/local_news/car</link>
-    <description>חדשות רכב מכלכליסט</description>
-    <language>he</language>
-    <lastBuildDate>{formatdate(usegmt=True)}</lastBuildDate>
-    {''.join(items)}
-  </channel>
-</rss>
-"""
+    rss = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<rss version="2.0">\n'
+        '  <channel>\n'
+        '    <title>כלכליסט - חדשות רכב</title>\n'
+        '    <link>https://www.calcalist.co.il/local_news/car</link>\n'
+        '    <description>חדשות רכב מכלכליסט</description>\n'
+        '    <language>he</language>\n'
+        f'    <lastBuildDate>{formatdate(usegmt=True)}</lastBuildDate>\n'
+        + "\n".join(rss_items) +
+        '\n  </channel>\n'
+        '</rss>\n'
+    )
 
-    with open("feed.xml", "w", encoding="utf-8") as f:
+    with open("feed.xml", "w", encoding="utf-8", newline="\n") as f:
         f.write(rss)
 
 if __name__ == "__main__":
