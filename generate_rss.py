@@ -66,7 +66,7 @@ def main():
     )
     
     with open("feed.rss", "w", encoding="utf-8", newline="\n") as f:
-    f.write(rss)
+        f.write(rss)
 
 if __name__ == "__main__":
     main()
