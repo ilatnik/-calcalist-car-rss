@@ -2,14 +2,25 @@ import requests
 from bs4 import BeautifulSoup
 from xml.sax.saxutils import escape
 from datetime import datetime, timezone
+from urllib.parse import urljoin
 
-URL = "https://www.calcalist.co.il/local_news/car"
+SOURCE_URL = "https://www.calcalist.co.il/local_news/car"
+
+# שירות proxy לקריאת האתר
+PROXY_URL = "https://api.allorigins.win/raw?url="
+
+url = PROXY_URL + SOURCE_URL
 
 headers = {
-    "User-Agent": "Mozilla/5.0 (compatible; CalcalistRSS/1.0)"
+    "User-Agent": "Mozilla/5.0"
 }
 
-response = requests.get(URL, headers=headers, timeout=30)
+response = requests.get(
+    url,
+    headers=headers,
+    timeout=60
+)
+
 response.raise_for_status()
 
 soup = BeautifulSoup(response.text, "html.parser")
@@ -17,18 +28,10 @@ soup = BeautifulSoup(response.text, "html.parser")
 articles = []
 seen = set()
 
-# Find links to Calcalist articles
 for a in soup.find_all("a", href=True):
 
-    href = a["href"]
-
-    if not href.startswith("https://www.calcalist.co.il/"):
-        continue
-
-    if "/local_news/" not in href:
-        continue
-
     title = a.get_text(" ", strip=True)
+    href = a["href"]
 
     if not title:
         continue
@@ -36,14 +39,23 @@ for a in soup.find_all("a", href=True):
     if len(title) < 10:
         continue
 
-    if href in seen:
+    link = urljoin(SOURCE_URL, href)
+
+    if "calcalist.co.il" not in link:
         continue
 
-    seen.add(href)
+    if link in seen:
+        continue
+
+    # רק כתבות ממדור הרכב
+    if "/local_news/car" not in link and "/category/3783" not in link:
+        continue
+
+    seen.add(link)
 
     articles.append({
         "title": title,
-        "link": href
+        "link": link
     })
 
     if len(articles) >= 50:
@@ -60,13 +72,14 @@ for article in articles:
     link = escape(article["link"])
 
     items.append(f"""
-    <item>
-        <title>{title}</title>
-        <link>{link}</link>
-        <guid isPermaLink="true">{link}</guid>
-        <pubDate>{now.strftime("%a, %d %b %Y %H:%M:%S GMT")}</pubDate>
-    </item>
-    """)
+<item>
+<title>{title}</title>
+<link>{link}</link>
+<guid isPermaLink="true">{link}</guid>
+<pubDate>{now.strftime("%a, %d %b %Y %H:%M:%S GMT")}</pubDate>
+</item>
+""")
+
 
 rss = f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
@@ -76,7 +89,7 @@ rss = f"""<?xml version="1.0" encoding="UTF-8"?>
 
 <link>https://www.calcalist.co.il/local_news/car</link>
 
-<description>כל הכתבות החדשות ממדור הרכב של כלכליסט</description>
+<description>חדשות הרכב של כלכליסט</description>
 
 <language>he</language>
 
@@ -88,7 +101,8 @@ rss = f"""<?xml version="1.0" encoding="UTF-8"?>
 </rss>
 """
 
+
 with open("feed.xml", "w", encoding="utf-8") as f:
     f.write(rss)
 
-print(f"Created RSS feed with {len(articles)} articles")
+print("RSS created:", len(articles), "articles")
