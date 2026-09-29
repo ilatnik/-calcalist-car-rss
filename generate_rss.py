@@ -1,108 +1,63 @@
-import requests
-from bs4 import BeautifulSoup
-from xml.sax.saxutils import escape
-from datetime import datetime, timezone
-from urllib.parse import urljoin
+import urllib.request
+import xml.etree.ElementTree as ET
+from email.utils import formatdate
+from html import escape
 
-SOURCE_URL = "https://www.calcalist.co.il/local_news/car"
-
-# שירות proxy לקריאת האתר
-PROXY_URL = "https://api.allorigins.win/raw?url="
-
-url = PROXY_URL + SOURCE_URL
-
-headers = {
-    "User-Agent": "Mozilla/5.0"
-}
-
-response = requests.get(
-    url,
-    headers=headers,
-    timeout=60
+GOOGLE_NEWS_URL = (
+    "https://news.google.com/rss/search"
+    "?q=site%3Acalcalist.co.il%2Flocal_news%2Fcar"
+    "&hl=he&gl=IL&ceid=IL%3Ahe"
 )
 
-response.raise_for_status()
+def fetch(url):
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0"}
+    )
+    with urllib.request.urlopen(req, timeout=30) as response:
+        return response.read()
 
-soup = BeautifulSoup(response.text, "html.parser")
+def main():
+    data = fetch(GOOGLE_NEWS_URL)
+    root = ET.fromstring(data)
 
-articles = []
-seen = set()
+    items = []
 
-for a in soup.find_all("a", href=True):
+    for item in root.findall("./channel/item"):
+        title = item.findtext("title", "")
+        link = item.findtext("link", "")
+        description = item.findtext("description", "")
+        pub_date = item.findtext("pubDate", "")
+        guid = item.findtext("guid", link)
 
-    title = a.get_text(" ", strip=True)
-    href = a["href"]
+        if "calcalist.co.il" not in (link or ""):
+            continue
 
-    if not title:
-        continue
+        items.append(f"""
+        <item>
+          <title>{escape(title)}</title>
+          <link>{escape(link)}</link>
+          <guid isPermaLink="false">{escape(guid)}</guid>
+          <pubDate>{escape(pub_date)}</pubDate>
+          <description>{escape(description)}</description>
+        </item>
+        """)
 
-    if len(title) < 10:
-        continue
-
-    link = urljoin(SOURCE_URL, href)
-
-    if "calcalist.co.il" not in link:
-        continue
-
-    if link in seen:
-        continue
-
-    # רק כתבות ממדור הרכב
-    if "/local_news/car" not in link and "/category/3783" not in link:
-        continue
-
-    seen.add(link)
-
-    articles.append({
-        "title": title,
-        "link": link
-    })
-
-    if len(articles) >= 50:
-        break
-
-
-now = datetime.now(timezone.utc)
-
-items = []
-
-for article in articles:
-
-    title = escape(article["title"])
-    link = escape(article["link"])
-
-    items.append(f"""
-<item>
-<title>{title}</title>
-<link>{link}</link>
-<guid isPermaLink="true">{link}</guid>
-<pubDate>{now.strftime("%a, %d %b %Y %H:%M:%S GMT")}</pubDate>
-</item>
-""")
-
-
-rss = f"""<?xml version="1.0" encoding="UTF-8"?>
+    rss = f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
-<channel>
-
-<title>כלכליסט – רכב</title>
-
-<link>https://www.calcalist.co.il/local_news/car</link>
-
-<description>חדשות הרכב של כלכליסט</description>
-
-<language>he</language>
-
-<lastBuildDate>{now.strftime("%a, %d %b %Y %H:%M:%S GMT")}</lastBuildDate>
-
-{''.join(items)}
-
-</channel>
+  <channel>
+    <title>כלכליסט - חדשות רכב</title>
+    <link>https://www.calcalist.co.il/local_news/car</link>
+    <description>חדשות רכב מכלכליסט</description>
+    <language>he</language>
+    <lastBuildDate>{formatdate(usegmt=True)}</lastBuildDate>
+    {''.join(items)}
+  </channel>
 </rss>
 """
 
+    with open("feed.xml", "w", encoding="utf-8") as f:
+        f.write(rss)
 
-with open("feed.xml", "w", encoding="utf-8") as f:
-    f.write(rss)
-
-print("RSS created:", len(articles), "articles")
+if __name__ == "__main__":
+    main()
