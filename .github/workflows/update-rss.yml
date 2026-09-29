@@ -2,7 +2,6 @@ name: Update Calcalist RSS
 
 on:
   workflow_dispatch:
-
   schedule:
     - cron: "*/30 * * * *"
 
@@ -10,36 +9,20 @@ permissions:
   contents: write
 
 jobs:
-
   update:
-
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
-      - name: Install dependencies
-        run: |
-          pip install requests beautifulsoup4
-
       - name: Generate RSS
-        run: |
-          python generate_rss.py
+        run: python generate_rss.py
 
       - name: Commit RSS
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add feed.xml
-
           git diff --cached --quiet || git commit -m "Update RSS feed"
-
           git push
